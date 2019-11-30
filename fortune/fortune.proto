@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package fortune;
+
+message Request {
+  string category = 1;
+}
+
+message Cookie {
+  string text = 1;
+}
+
+service Fortune {
+  rpc GetCookie (Request) returns (Cookie) {}
+}
