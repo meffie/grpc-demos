@@ -2,14 +2,22 @@ syntax = "proto3";
 
 package fortune;
 
-message Request {
+message Empty {
+}
+
+message CookieResponse {
+  string cookie = 1;
+}
+
+message CookieRequest {
   string category = 1;
 }
 
-message Cookie {
-  string text = 1;
+message Categories {
+  repeated string categories = 1;
 }
 
 service Fortune {
-  rpc GetCookie (Request) returns (Cookie) {}
+  rpc ListCategories (Empty) returns (Categories) {}
+  rpc GetCookie (CookieRequest) returns (CookieResponse) {}
 }

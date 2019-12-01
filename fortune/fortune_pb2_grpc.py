@@ -14,16 +14,28 @@ class FortuneStub(object):
     Args:
       channel: A grpc.Channel.
     """
+    self.ListCategories = channel.unary_unary(
+        '/fortune.Fortune/ListCategories',
+        request_serializer=fortune__pb2.Empty.SerializeToString,
+        response_deserializer=fortune__pb2.Categories.FromString,
+        )
     self.GetCookie = channel.unary_unary(
         '/fortune.Fortune/GetCookie',
-        request_serializer=fortune__pb2.Request.SerializeToString,
-        response_deserializer=fortune__pb2.Cookie.FromString,
+        request_serializer=fortune__pb2.CookieRequest.SerializeToString,
+        response_deserializer=fortune__pb2.CookieResponse.FromString,
         )
 
 
 class FortuneServicer(object):
   # missing associated documentation comment in .proto file
   pass
+
+  def ListCategories(self, request, context):
+    # missing associated documentation comment in .proto file
+    pass
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
 
   def GetCookie(self, request, context):
     # missing associated documentation comment in .proto file
@@ -35,10 +47,15 @@ class FortuneServicer(object):
 
 def add_FortuneServicer_to_server(servicer, server):
   rpc_method_handlers = {
+      'ListCategories': grpc.unary_unary_rpc_method_handler(
+          servicer.ListCategories,
+          request_deserializer=fortune__pb2.Empty.FromString,
+          response_serializer=fortune__pb2.Categories.SerializeToString,
+      ),
       'GetCookie': grpc.unary_unary_rpc_method_handler(
           servicer.GetCookie,
-          request_deserializer=fortune__pb2.Request.FromString,
-          response_serializer=fortune__pb2.Cookie.SerializeToString,
+          request_deserializer=fortune__pb2.CookieRequest.FromString,
+          response_serializer=fortune__pb2.CookieResponse.SerializeToString,
       ),
   }
   generic_handler = grpc.method_handlers_generic_handler(
