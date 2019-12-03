@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package chat;
+
+message Empty {
+}
+
+message Message {
+    string nick = 1;
+    string text = 2;
+}
+
+service Chat {
+    rpc PostMessage (Message) returns (Empty) {}
+    rpc GetMessages (Empty) returns (stream Message) {}
+}
