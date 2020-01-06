@@ -22,6 +22,7 @@ class Chat(chat_pb2_grpc.ChatServicer):
     def GetMessages(self, request, context):
         n = 10
         for i in range(1, n+1):
+            time.sleep(2)
             text = 'message {0} of {1}'.format(i, n)
             message = chat_pb2.Message(nick='tycobb', text=text)
             yield message
