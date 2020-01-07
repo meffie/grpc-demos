@@ -3,7 +3,8 @@ import argparse
 import concurrent.futures
 import logging
 import sys
-import time
+from threading import Lock
+from queue import Queue
 
 import grpc
 import chat_pb2
@@ -12,21 +13,35 @@ import chat_pb2_grpc
 class Chat(chat_pb2_grpc.ChatServicer):
 
     def __init__(self):
-        pass
+        self.lock = Lock()
+        self.queues = []
+
+    def get_queue(self):
+        queue = Queue()
+        with self.lock:
+            self.queues.append(queue)
+        print('get_queue() id =', id(queue))
+        return queue
+
+    def put_queue(self, queue):
+        print('put_queue() id =', id(queue))
+        with self.lock:
+            self.queues.remove(queue)
 
     def PostMessage(self, request, context):
         logging.info('PostMessage(): nick="{0}", text="{1}"'\
             .format(request.nick, request.text))
+        with self.lock:
+            for queue in self.queues:
+                queue.put((request.nick, request.text))
         return chat_pb2.Empty()
 
     def GetMessages(self, request, context):
-        n = 10
-        for i in range(1, n+1):
-            time.sleep(2)
-            text = 'message {0} of {1}'.format(i, n)
-            message = chat_pb2.Message(nick='tycobb', text=text)
-            yield message
-            #time.sleep(1)
+        queue = self.get_queue()
+        while True: # todo: completion from client
+            nick,text = queue.get()
+            yield chat_pb2.Message(nick=nick, text=text)
+        self.put_queue(queue) # todo: with or try block
 
 def main():
     parser = argparse.ArgumentParser(
