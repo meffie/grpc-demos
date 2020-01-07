@@ -18,9 +18,10 @@ class Chat(chat_pb2_grpc.ChatServicer):
 
     def get_queue(self):
         queue = Queue()
+        print('get_queue() id =', id(queue))
         with self.lock:
             self.queues.append(queue)
-        print('get_queue() id =', id(queue))
+            logging.info('number of queues: {0}'.format(len(self.queues)))
         return queue
 
     def put_queue(self, queue):
@@ -33,14 +34,20 @@ class Chat(chat_pb2_grpc.ChatServicer):
             .format(request.nick, request.text))
         with self.lock:
             for queue in self.queues:
-                queue.put((request.nick, request.text))
+                message = chat_pb2.Message(nick=request.nick, text=request.text)
+                queue.put(message)
         return chat_pb2.Empty()
 
     def GetMessages(self, request, context):
+        # xxx: leaks queues!
         queue = self.get_queue()
-        while True: # todo: completion from client
-            nick,text = queue.get()
-            yield chat_pb2.Message(nick=nick, text=text)
+        while True: # todo: completion from client?
+            try:
+                message = queue.get(timeout=10)
+            except Queue.Empty:
+                message = chat_pb2.Message(nick='server', text='ping')
+            yield message
+
         self.put_queue(queue) # todo: with or try block
 
 def main():

@@ -14,7 +14,6 @@ import queue
 import argparse
 import logging
 import sys
-import time
 import grpc
 import chat_pb2
 import chat_pb2_grpc
@@ -25,6 +24,7 @@ class ChatClientRPC:
         addr = '{0}:{1}'.format(hostname, port)
         self.channel = grpc.insecure_channel(addr)
         self.stub = chat_pb2_grpc.ChatStub(self.channel)
+        self.messages = None  # generator
         self.send_thread = threading.Thread(target=self._post_messages)
         self.recv_thread = threading.Thread(target=self._get_messages)
         self.send_queue = queue.Queue()
@@ -32,10 +32,12 @@ class ChatClientRPC:
 
     def shutdown(self):
         self.running = False
+        if self.messages:
+            self.messages.cancel()
         self.send_queue.put(None)
-        self.channel.close()
         self.send_thread.join()
         self.recv_thread.join()
+        self.channel.close()
 
     def post_message(self, nick, text):
         element = (nick, text)
@@ -55,18 +57,19 @@ class ChatClientRPC:
                 message = chat_pb2.Message(nick=element[0], text=element[1])
                 self.stub.PostMessage(message)
             except grpc.RpcError as e:
-                logging.error('rpc error {0}: {1}', e.code, e.details)
+                logging.error('RPC error: {0}'.format(e))
 
     def _get_messages(self):
         empty = chat_pb2.Empty()
         while self.running:
+            self.messages = self.stub.GetMessages(empty)
             try:
-                for message in self.stub.GetMessages(empty):
-                    text = '[{0}]: {1}'.format(message.nick, message.text)
-                    self.recv_queue.put(text)
+                for message in self.messages:
+                    self.recv_queue.put(message)
             except grpc.RpcError as e:
-                logging.error('rpc error {0}: {1}', e.code, e.details)
-            #time.sleep(10)
+                if not e.cancelled():
+                    logging.error('RPC error: {0}'.format(e))
+        self.messages = None
 
     def get_next_message(self):
         try:
@@ -95,7 +98,6 @@ class ChatClientApp:
         self.root.bind('<Return>', self.post)
 
     def on_close(self):
-        print('closing')
         self.rpc.shutdown()
         self.root.destroy()
 
@@ -120,9 +122,10 @@ class ChatClientApp:
 
     def _update_messages(self):
         for message in self.rpc.get_next_message():
-            if not message.endswith('\n'):
-                message += '\n'
-            self.textarea.insert('end', message)
+            self.textarea.insert('end', '[{0}]: '.format(message.nick))
+            self.textarea.insert('end', message.text)
+            if not message.text.endswith('\n'):
+                self.textarea.insert('end', '\n')
             self.textarea.see('end')
             self.textarea.update_idletasks()
         self.textarea.after(100, self._update_messages)
