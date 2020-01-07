@@ -21,25 +21,36 @@ import chat_pb2_grpc
 
 class ChatClientRPC:
     def __init__(self, hostname, port):
+        self.running = False
         addr = '{0}:{1}'.format(hostname, port)
         self.channel = grpc.insecure_channel(addr)
         self.stub = chat_pb2_grpc.ChatStub(self.channel)
+        self.send_thread = threading.Thread(target=self._post_messages)
+        self.recv_thread = threading.Thread(target=self._get_messages)
         self.send_queue = queue.Queue()
         self.recv_queue = queue.Queue()
+
+    def shutdown(self):
+        self.running = False
+        self.send_queue.put(None)
+        self.channel.close()
+        self.send_thread.join()
+        self.recv_thread.join()
 
     def post_message(self, nick, text):
         element = (nick, text)
         self.send_queue.put(element)
 
     def start(self):
-        self.send_thread = threading.Thread(target=self._post_messages)
-        self.recv_thread = threading.Thread(target=self._get_messages)
+        self.running = True
         self.send_thread.start()
         self.recv_thread.start()
 
     def _post_messages(self):
-        while True:
+        while self.running:
             element = self.send_queue.get()
+            if element is None:
+                break;
             try:
                 message = chat_pb2.Message(nick=element[0], text=element[1])
                 self.stub.PostMessage(message)
@@ -48,14 +59,14 @@ class ChatClientRPC:
 
     def _get_messages(self):
         empty = chat_pb2.Empty()
-        while True:
+        while self.running:
             try:
                 for message in self.stub.GetMessages(empty):
                     text = '[{0}]: {1}'.format(message.nick, message.text)
                     self.recv_queue.put(text)
             except grpc.RpcError as e:
                 logging.error('rpc error {0}: {1}', e.code, e.details)
-            time.sleep(10)
+            #time.sleep(10)
 
     def get_next_message(self):
         try:
@@ -80,7 +91,13 @@ class ChatClientApp:
         frame = tk.Frame(self.root, width=200, height=200)
         frame.pack(fill='both', expand=True)
         self.create_widgets(frame)
+        self.root.protocol('WM_DELETE_WINDOW', self.on_close)
         self.root.bind('<Return>', self.post)
+
+    def on_close(self):
+        print('closing')
+        self.rpc.shutdown()
+        self.root.destroy()
 
     def create_widgets(self, parent):
         self.textarea = scrolledtext.ScrolledText(
